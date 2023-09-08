@@ -1,6 +1,15 @@
--- !!! use matchID + playerID as PK in stats
+--table and database creation
 -- Create Database
 CREATE DATABASE EPL;
+
+-- Create Venues table
+CREATE TABLE Venues (
+  venueID INT IDENTITY(1,1) PRIMARY KEY,
+  venueName VARCHAR(255) UNIQUE,
+  venueLocation VARCHAR(255),
+  capacity INT NOT NULL,
+  CHECK (venueName NOT LIKE '%[^A-Za-z0-9. \\p{L}]%')
+);
 
 -- Create Clubs table
 CREATE TABLE Clubs (
@@ -21,14 +30,6 @@ CREATE TABLE Clubs (
   FOREIGN KEY (home) REFERENCES Venues(venueID)
 );
 
--- Create Venues table
-CREATE TABLE Venues (
-  venueID INT IDENTITY(1,1) PRIMARY KEY,
-  venueName VARCHAR(255) UNIQUE,
-  venueLocation VARCHAR(255),
-  capacity INT NOT NULL,
-  CHECK (venueName NOT LIKE '%[^A-Za-z0-9. \\p{L}]%')
-);
 
 -- Create Managers table
 CREATE TABLE Managers (
@@ -51,7 +52,7 @@ CREATE TABLE Managers (
 
 -- Create ManagerClub table
 CREATE TABLE ClubsManagers (
-  clubManagerID INT IDENTITY(1, 1),
+  clubManagerID INT IDENTITY(1, 1) PRIMARY KEY,
   managerID INT,
   clubID INT,
   startDate DATE,
@@ -83,10 +84,12 @@ CREATE TABLE Players (
   facebook VARCHAR(255),
   youtube VARCHAR(255),
   tikTok VARCHAR(255),
+  UNIQUE (squadNumber),
   FOREIGN KEY (clubID) REFERENCES Clubs(clubID),
   CHECK (firstName NOT LIKE '%[^A-Za-z. \\p{L}]%'),
   CHECK (middleName NOT LIKE '%[^A-Za-z. \\p{L}]%'),
   CHECK (lastName NOT LIKE '%[^A-Za-z. \\p{L}]%'),
+  CHECK (position IN ('Goalkeeper', 'Defender', 'Midfielder', 'Forward')),
   CHECK (email LIKE '%_@__%.__%'), 
   CHECK (paymentFrequency IN ('monthly', 'annual', 'weekly', 'bi-weekly'))
 );
@@ -99,7 +102,7 @@ CREATE TABLE Officials (
   firstName NVARCHAR(255) NOT NULL,
   middleName VARCHAR(255),
   lastName NVARCHAR(255) NOT NULL,
-  email VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
   maxRole VARCHAR(50) NOT NULL, 
   nationality VARCHAR(255) NOT NULL,
   CHECK (firstName NOT LIKE '%[^A-Za-z. \\p{L}]%'),
@@ -126,25 +129,12 @@ CREATE TABLE Fixtures (
   FOREIGN KEY (homeTeamID) REFERENCES Clubs(clubID),
   FOREIGN KEY (awayTeamID) REFERENCES Clubs(clubID),
   FOREIGN KEY (venueID) REFERENCES Venues(venueID),
-  UNIQUE (homeTeamID, awayTeamID, fixtureDate)
+  UNIQUE (homeTeamID, awayTeamID, fixtureDate),
   FOREIGN KEY (refereeID) REFERENCES Officials(officialID),
   FOREIGN KEY (assistantReferee1ID) REFERENCES Officials(officialID),
   FOREIGN KEY (assistantReferee2ID) REFERENCES Officials(officialID),
   FOREIGN KEY (fourthOfficialID) REFERENCES Officials(officialID),
-  /*CHECK (refereeID IN (SELECT officialID FROM Officials WHERE maxRole = 'Referee')),
-  CHECK (assistantReferee1ID IN (
-    SELECT officialID FROM Officials WHERE maxRole IN('Referee', 'Assistant referee')
-    )
-  ),
-  CHECK (assistantReferee2ID IN (
-    SELECT officialID FROM Officials WHERE maxRole IN('Referee', 'Assistant referee')
-    )
-  ),
-  CHECK (fourthOfficialID IN (
-    SELECT officialID FROM Officials WHERE maxRole IN('Referee', 'Assistant referee', 'Fourth official')
-    )
-  ),
-  CHECK (fixtureStatus IN('Scheduled', 'In progress', 'Completed', 'Cancelled', 'Postponed', 'Forfeit', 'Abandoned'))*/
+  CHECK (fixtureStatus IN('Scheduled', 'In progress', 'Completed', 'Cancelled', 'Postponed', 'Forfeit', 'Abandoned'))
 );
 
 -- Create Matches table
@@ -190,7 +180,7 @@ CREATE TABLE Goals (
   FOREIGN KEY (playerID) REFERENCES Players(playerID),
   FOREIGN KEY (clubFor) REFERENCES Clubs(clubID),
   FOREIGN KEY (clubAt) REFERENCES Clubs(clubID),
-  CHECK (goalType IN('Headed goal', 'Goal with right foot', 'Goal with left foot', 'Penalty Scored', 'Freekick scored', 'Own goal'))
+  CHECK (goalType IN('Headed goal', 'Goal with right foot', 'Goal with left foot', 'Penalty scored', 'Freekick scored', 'Own goal'))
 );
 
 -- Create Penalties table
@@ -212,6 +202,22 @@ CREATE TABLE Penalties (
   CHECK (converted IN('True', 'False'))
 );
 
+-- Create DisciplineStats table
+CREATE TABLE DisciplineStats (
+  disciplineStatID INT IDENTITY(1,1) PRIMARY KEY,
+  playerID INT NOT NULL,
+  matchID INT NOT NULL,
+  clubFor INT NOT NULL,
+  cardMinute SMALLINT NOT NULL,
+  cardType VARCHAR(50) NOT NULL,
+  description VARCHAR(255),
+  UNIQUE (playerID, matchID, cardMinute, cardType),
+  FOREIGN KEY (matchID) REFERENCES Matches(matchID),
+  FOREIGN KEY (playerID) REFERENCES Players(playerID),
+  CHECK (cardType IN('Yellow', 'Red')),
+  FOREIGN KEY (clubFor) REFERENCES Clubs(clubID)
+  );
+
 -- Create Substitutions table
 CREATE TABLE Substitutions (
   substitutionID INT IDENTITY(1,1) PRIMARY KEY,
@@ -228,7 +234,7 @@ CREATE TABLE Substitutions (
   FOREIGN KEY (playerOutID) REFERENCES Players(playerID)
 );
 
--- Create Cards table
+-- Create PlayersStats table
 CREATE TABLE PlayersStats (
   matchID INT NOT NULL,
   playerID INT NOT NULL,
@@ -236,15 +242,15 @@ CREATE TABLE PlayersStats (
   clubAt INT NOT NULL,
   fouls SMALLINT NOT NULL DEFAULT 0,
   offsides SMALLINT NOT NULL DEFAULT 0,
-  headedGoal SMALLINT NOT NULL DEFAULT 0,
-  leftFootGoal SMALLINT NOT NULL DEFAULT 0,
-  rightFootGoal SMALLINT NOT NULL DEFAULT 0,
+  headedGoals SMALLINT NOT NULL DEFAULT 0,
+  goalsWithLeftFoot SMALLINT NOT NULL DEFAULT 0,
+  goalsWithRightFoot SMALLINT NOT NULL DEFAULT 0,
   penaltiesScored SMALLINT NOT NULL DEFAULT 0,
-  freekickScored SMALLINT NOT NULL DEFAULT 0,
-  shot SMALLINT NOT NULL DEFAULT 0,
-  shotOnTarget SMALLINT NOT NULL DEFAULT 0,
+  freekicksScored SMALLINT NOT NULL DEFAULT 0,
+  shots SMALLINT NOT NULL DEFAULT 0,
+  shotsOnTarget SMALLINT NOT NULL DEFAULT 0,
   hitWoodwork SMALLINT NOT NULL DEFAULT 0,
-  bigChanceMissed SMALLINT NOT NULL DEFAULT 0,
+  bigChancesMissed SMALLINT NOT NULL DEFAULT 0,
   assists SMALLINT NOT NULL DEFAULT 0,
   passes SMALLINT NOT NULL DEFAULT 0,
   bigChancesCreated SMALLINT NOT NULL DEFAULT 0,
@@ -263,7 +269,6 @@ CREATE TABLE PlayersStats (
   aerialBattlesLost SMALLINT NOT NULL DEFAULT 0,
   errorsLeadingToGoal SMALLINT NOT NULL DEFAULT 0,
   ownGoals SMALLINT NOT NULL DEFAULT 0,
-  cleanSheet 
   PRIMARY KEY (matchID, playerID),
   FOREIGN KEY (matchID) REFERENCES Matches(matchID),
   FOREIGN KEY (playerID) REFERENCES Players(playerID),
@@ -271,26 +276,8 @@ CREATE TABLE PlayersStats (
   FOREIGN KEY (clubAt) REFERENCES Clubs(clubID)
 );
 
--- Create DisciplineStats table
-CREATE TABLE DisciplineStats (
-  disciplineStatID INT IDENTITY(1,1) PRIMARY KEY,
-  playerID INT NOT NULL,
-  matchID INT NOT NULL,
-  clubFor INT NOT NULL,
-  cardMinute SMALLINT NOT NULL,
-  cardType VARCHAR(50) NOT NULL,
-  description VARCHAR(255),
-  UNIQUE (playerID, matchID, cardMinute, cardType),
-  FOREIGN KEY (matchID) REFERENCES Matches(matchID),
-  FOREIGN KEY (playerID) REFERENCES Players(playerID),
-  CHECK (cardType IN('Yellow', 'Red')),
-  FOREIGN KEY (clubFor) REFERENCES Clubs(clubID),
-  FOREIGN KEY (clubAgainst) REFERENCES Clubs(clubID)
-)
-
 -- Create GoalkeepersStats table
 CREATE TABLE GoalkeepersStats (
-  goalkeepersStatID INT IDENTITY(1,1) PRIMARY KEY,
   playerID INT NOT NULL,
   matchID INT NOT NULL,
   clubFor INT NOT NULL,
@@ -319,8 +306,8 @@ CREATE TABLE PlayerTransactions (
   transactionDate DATE NOT NULL,
   UNIQUE (playerID, fromClub, toClub, transactionDate),
   FOREIGN KEY (playerID) REFERENCES Players(playerID),
-  FOREIGN KEY (from) REFERENCES Clubs(clubID),
-  FOREIGN KEY (to) REFERENCES Clubs(clubID),
+  FOREIGN KEY (fromClub) REFERENCES Clubs(clubID),
+  FOREIGN KEY (toClub) REFERENCES Clubs(clubID),
   CHECK (transactionType IN('Loan', 'Transfer', 'Release', 'Resign'))
 );
 
@@ -373,6 +360,7 @@ CREATE TABLE MonthlyPlayerAwards (
   CHECK (awardType IN ('Player of the Month', 'Goal of the Month', 'Save of the Month'))
 );
 
+-- Create Manager of the Month table for In season monthly manager awards
 CREATE TABLE MOTM (
   awardYear INT,
   awardMonth INT,
